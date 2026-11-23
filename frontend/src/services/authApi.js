@@ -36,3 +36,30 @@ export function registerUser({ fullName, email, password }) {
     }),
   });
 }
+
+/**
+ * Authenticate an existing user and return a signed token + user profile.
+ * @param {{ email: string, password: string }} payload
+ */
+export function loginUser({ email, password }) {
+  return requestJson("/login", {
+    method: "POST",
+    body: JSON.stringify({
+      email: email.trim().toLowerCase(),
+      password,
+    }),
+  });
+}
+
+/**
+ * Fetch the authenticated user's profile using a Bearer token.
+ * @param {string} token
+ */
+export function fetchCurrentUser(token) {
+  return requestJson("/me", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}

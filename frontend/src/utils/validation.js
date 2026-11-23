@@ -71,3 +71,20 @@ export function validateRegisterForm(values) {
 
   return errors;
 }
+
+/**
+ * Validate login form inputs.
+ * @param {{ email: string, password: string }} values
+ * @returns {Record<string, string>} Field error map.
+ */
+export function validateLoginForm(values) {
+  const errors = {};
+  const emailErr = validateEmail(values.email);
+  if (emailErr) errors.email = emailErr;
+
+  if (!values.password) {
+    errors.password = "Şifre alanı zorunludur.";
+  }
+
+  return errors;
+}

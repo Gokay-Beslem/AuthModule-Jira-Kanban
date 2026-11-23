@@ -1,12 +1,17 @@
 """Authentication API endpoints (Register, Login, Password Reset)."""
 
-from flask import Blueprint, current_app, jsonify, request
+from functools import wraps
+
+from flask import Blueprint, current_app, g, jsonify, request
 
 from backend.db import db_session
 from backend.security import (
+    create_access_token,
     hash_password,
     validate_email,
     validate_password_strength,
+    verify_access_token,
+    verify_password,
 )
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -72,3 +77,81 @@ def register():
         ),
         201,
     )
+
+
+def require_auth(handler):
+    """Decorator verifying Bearer token and loading g.current_user from SQLite."""
+
+    @wraps(handler)
+    def wrapper(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"error": "Yetkilendirme token'ı eksik."}), 401
+
+        token = auth_header.split(" ", 1)[1].strip()
+        payload = verify_access_token(
+            token,
+            current_app.config["SECRET_KEY"],
+            current_app.config["TOKEN_TTL_SECONDS"],
+        )
+        if not payload:
+            return jsonify({"error": "Oturum token'ı geçersiz veya süresi dolmuş."}), 401
+
+        with db_session(current_app.config["DB_PATH"]) as conn:
+            user = conn.execute(
+                "SELECT id, full_name, email, created_at FROM users WHERE id = ?",
+                (payload.get("user_id"),),
+            ).fetchone()
+
+        if not user:
+            return jsonify({"error": "Kullanıcı bulunamadı."}), 401
+
+        g.current_user = user
+        return handler(*args, **kwargs)
+
+    return wrapper
+
+
+@auth_bp.post("/login")
+def login():
+    """Authenticate an existing user and issue a signed Bearer token (AUTH-5)."""
+    payload = request.get_json(silent=True) or {}
+    email = (payload.get("email") or "").strip().lower()
+    password = payload.get("password") or ""
+
+    email_error = validate_email(email)
+    if email_error:
+        return jsonify({"error": email_error}), 400
+
+    if not password:
+        return jsonify({"error": "Şifre alanı zorunludur."}), 400
+
+    with db_session(current_app.config["DB_PATH"]) as conn:
+        user = conn.execute(
+            "SELECT id, full_name, email, password_hash, created_at FROM users WHERE email = ?",
+            (email,),
+        ).fetchone()
+
+    if not user or not verify_password(password, user["password_hash"]):
+        return jsonify({"error": "E-posta adresi veya şifre hatalı."}), 401
+
+    token = create_access_token(
+        user["id"], user["email"], current_app.config["SECRET_KEY"]
+    )
+    return (
+        jsonify(
+            {
+                "message": "Giriş başarılı.",
+                "token": token,
+                "user": serialize_user(user),
+            }
+        ),
+        200,
+    )
+
+
+@auth_bp.get("/me")
+@require_auth
+def get_me():
+    """Return the currently authenticated user's profile (AUTH-5)."""
+    return jsonify({"user": serialize_user(g.current_user)}), 200

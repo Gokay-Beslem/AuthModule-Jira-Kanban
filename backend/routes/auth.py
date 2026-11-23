@@ -1,5 +1,7 @@
 """Authentication API endpoints (Register, Login, Password Reset)."""
 
+import secrets
+import time
 from functools import wraps
 
 from flask import Blueprint, current_app, g, jsonify, request
@@ -155,3 +157,90 @@ def login():
 def get_me():
     """Return the currently authenticated user's profile (AUTH-5)."""
     return jsonify({"user": serialize_user(g.current_user)}), 200
+
+
+@auth_bp.post("/forgot-password")
+def forgot_password():
+    """Generate a single-use, time-limited password reset token (AUTH-6)."""
+    payload = request.get_json(silent=True) or {}
+    email = (payload.get("email") or "").strip().lower()
+
+    email_error = validate_email(email)
+    if email_error:
+        return jsonify({"error": email_error}), 400
+
+    ttl = current_app.config["RESET_TOKEN_TTL_SECONDS"]
+    expires_at = int(time.time()) + ttl
+    reset_token = secrets.token_urlsafe(24)
+
+    with db_session(current_app.config["DB_PATH"]) as conn:
+        user = conn.execute(
+            "SELECT id FROM users WHERE email = ?", (email,)
+        ).fetchone()
+        if not user:
+            return (
+                jsonify({"error": "Bu e-posta adresine kayıtlı kullanıcı bulunamadı."}),
+                404,
+            )
+
+        conn.execute(
+            "UPDATE password_resets SET used = 1 WHERE user_id = ? AND used = 0",
+            (user["id"],),
+        )
+        conn.execute(
+            "INSERT INTO password_resets (user_id, token, expires_at) VALUES (?, ?, ?)",
+            (user["id"], reset_token, expires_at),
+        )
+
+    return (
+        jsonify(
+            {
+                "message": "Şifre sıfırlama kodu oluşturuldu.",
+                "reset_token": reset_token,
+                "expires_in_seconds": ttl,
+            }
+        ),
+        200,
+    )
+
+
+@auth_bp.post("/reset-password")
+def reset_password():
+    """Verify reset token and update user's password hash in SQLite (AUTH-6)."""
+    payload = request.get_json(silent=True) or {}
+    token = (payload.get("token") or "").strip()
+    new_password = payload.get("new_password") or ""
+
+    if not token:
+        return jsonify({"error": "Sıfırlama kodu (token) zorunludur."}), 400
+
+    password_error = validate_password_strength(new_password)
+    if password_error:
+        return jsonify({"error": password_error}), 400
+
+    now_ts = int(time.time())
+    new_hash = hash_password(new_password)
+
+    with db_session(current_app.config["DB_PATH"]) as conn:
+        reset_row = conn.execute(
+            "SELECT id, user_id, expires_at, used FROM password_resets WHERE token = ?",
+            (token,),
+        ).fetchone()
+
+        if not reset_row:
+            return jsonify({"error": "Geçersiz şifre sıfırlama kodu."}), 400
+        if reset_row["used"]:
+            return jsonify({"error": "Bu şifre sıfırlama kodu daha önce kullanılmış."}), 400
+        if reset_row["expires_at"] < now_ts:
+            return jsonify({"error": "Şifre sıfırlama kodunun süresi dolmuş."}), 400
+
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (new_hash, reset_row["user_id"]),
+        )
+        conn.execute(
+            "UPDATE password_resets SET used = 1 WHERE id = ?",
+            (reset_row["id"],),
+        )
+
+    return jsonify({"message": "Şifreniz başarıyla güncellendi."}), 200

@@ -78,10 +78,17 @@ export default function LoginPage({ onNavigate, onLoginSuccess }) {
       </form>
 
       <div className="auth-footer-links">
-        Henüz hesabınız yok mu?{" "}
-        <button type="button" className="link-btn" onClick={() => onNavigate("register")}>
-          Kayıt Ol
-        </button>
+        <div>
+          <button type="button" className="link-btn" onClick={() => onNavigate("reset")}>
+            Şifremi Unuttum
+          </button>
+        </div>
+        <div style={{ marginTop: "8px" }}>
+          Henüz hesabınız yok mu?{" "}
+          <button type="button" className="link-btn" onClick={() => onNavigate("register")}>
+            Kayıt Ol
+          </button>
+        </div>
       </div>
     </div>
   );

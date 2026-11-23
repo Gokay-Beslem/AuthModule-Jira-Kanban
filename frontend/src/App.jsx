@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import { fetchCurrentUser } from "./services/authApi";
 
 const TOKEN_STORAGE_KEY = "auth_module_token";
@@ -72,7 +73,11 @@ export default function App() {
           >
             Giriş Yap
           </button>
-          <button type="button" className="auth-tab" disabled title="AUTH-3 ile eklenecek">
+          <button
+            type="button"
+            className={`auth-tab ${activeTab === "reset" ? "active" : ""}`}
+            onClick={() => setActiveTab("reset")}
+          >
             Şifre Sıfırla
           </button>
         </nav>
@@ -88,6 +93,8 @@ export default function App() {
           />
         ) : activeTab === "register" ? (
           <RegisterPage onNavigate={setActiveTab} />
+        ) : activeTab === "reset" ? (
+          <ResetPasswordPage onNavigate={setActiveTab} />
         ) : (
           <LoginPage onNavigate={setActiveTab} onLoginSuccess={handleLoginSuccess} />
         )}

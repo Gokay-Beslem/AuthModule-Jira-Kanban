@@ -63,3 +63,30 @@ export function fetchCurrentUser(token) {
     },
   });
 }
+
+/**
+ * Request a password reset token for a registered email address.
+ * @param {string} email
+ */
+export function requestPasswordReset(email) {
+  return requestJson("/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({
+      email: email.trim().toLowerCase(),
+    }),
+  });
+}
+
+/**
+ * Confirm password reset with token and new password.
+ * @param {{ token: string, newPassword: string }} payload
+ */
+export function confirmPasswordReset({ token, newPassword }) {
+  return requestJson("/reset-password", {
+    method: "POST",
+    body: JSON.stringify({
+      token: token.trim(),
+      new_password: newPassword,
+    }),
+  });
+}

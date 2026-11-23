@@ -88,3 +88,26 @@ export function validateLoginForm(values) {
 
   return errors;
 }
+
+/**
+ * Validate password reset confirmation form inputs.
+ * @param {{ token: string, newPassword: string, confirmPassword: string }} values
+ * @returns {Record<string, string>} Field error map.
+ */
+export function validateResetPasswordForm(values) {
+  const errors = {};
+  if (!values.token.trim()) {
+    errors.token = "Sıfırlama kodu (token) zorunludur.";
+  }
+
+  const passErr = validatePassword(values.newPassword);
+  if (passErr) errors.newPassword = passErr;
+
+  if (!values.confirmPassword) {
+    errors.confirmPassword = "Şifre tekrarı zorunludur.";
+  } else if (values.newPassword !== values.confirmPassword) {
+    errors.confirmPassword = "Şifreler eşleşmiyor.";
+  }
+
+  return errors;
+}
